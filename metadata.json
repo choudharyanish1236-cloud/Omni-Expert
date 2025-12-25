@@ -1,0 +1,5 @@
+{
+  "name": "OmniExpert: Prototype Engine",
+  "description": "High-fidelity engineering assistant for multi-domain prototype generation, technical specs, and verified code execution paths.",
+  "requestFramePermissions": []
+}
