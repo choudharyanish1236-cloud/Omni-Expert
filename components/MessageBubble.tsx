@@ -30,10 +30,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onUpdateFeedback
         <div className="flex-1 flex flex-col gap-3 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-black uppercase tracking-widest text-slate-500">
-              {isAssistant ? (isSearch ? 'Deep Search Result' : 'OmniExpert Node') : 'Operator'}
+              {isAssistant 
+                ? (isSearch ? 'Deep Search Result' : 'OmniExpert Node') 
+                : `Operator: ${message.sender || 'Unknown'}`}
             </span>
             <span className="text-[10px] text-slate-600 font-mono">
-              [{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]
+              [{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]
             </span>
             {isSearch && !isAssistant && (
               <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold text-blue-400 rounded uppercase">Search Query</span>

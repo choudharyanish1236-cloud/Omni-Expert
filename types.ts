@@ -31,6 +31,7 @@ export interface Source {
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
+  sender?: string; // Username of the person who sent the query
   content: string;
   timestamp: Date;
   intent?: MessageIntent;
@@ -43,4 +44,6 @@ export interface OmniExpertState {
   messages: Message[];
   isLoading: boolean;
   activeDomain: Domain;
+  activeSubDomain?: string;
+  roomId: string | null;
 }
