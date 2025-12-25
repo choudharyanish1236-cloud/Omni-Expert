@@ -35,16 +35,24 @@ export interface Source {
   snippet?: string;
 }
 
+export interface Attachment {
+  name: string;
+  mimeType: string;
+  data: string; // Base64 string
+  size: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
-  sender?: string; // Username of the person who sent the query
+  sender?: string;
   content: string;
   timestamp: Date;
   intent?: MessageIntent;
   thinking?: string;
   feedback?: Feedback;
   sources?: Source[];
+  attachments?: Attachment[];
 }
 
 export interface OmniExpertState {

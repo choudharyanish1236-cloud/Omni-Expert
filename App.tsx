@@ -1,12 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Domain, Message, Feedback, User, Source, MessageIntent, WorkMode } from './types';
+import { Domain, Message, Feedback, User, Source, MessageIntent, WorkMode, Attachment } from './types';
 import { geminiService } from './services/geminiService';
 import MessageBubble from './components/MessageBubble';
 import ChatInput from './components/ChatInput';
 import Auth from './components/Auth';
 import Profile from './components/Profile';
 import Toolbox from './components/Toolbox';
+import { Part } from '@google/genai';
 import { 
   TerminalIcon, 
   CpuIcon, 
@@ -150,7 +151,7 @@ const App: React.FC = () => {
     setActiveTools(prev => prev.includes(tool) ? prev.filter(t => t !== tool) : [...prev, tool]);
   };
 
-  const performInference = async (content: string, isSearch: boolean = false) => {
+  const performInference = async (content: string, isSearch: boolean = false, attachments: Attachment[] = []) => {
     if (!user || !activeMode) return;
     
     const contextPrefix = `[MODE: ${activeMode.toUpperCase()}] ${activeDomain ? `[DOMAIN: ${activeDomain}]` : ''} ${activeSubDomain ? `[FOCUS: ${activeSubDomain}]` : ''}`;
@@ -160,7 +161,8 @@ const App: React.FC = () => {
       sender: user.username, 
       content: `${contextPrefix} ${content}`, 
       intent: isSearch ? MessageIntent.SEARCH : MessageIntent.CHAT, 
-      timestamp: new Date() 
+      timestamp: new Date(),
+      attachments: attachments
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -172,12 +174,22 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, assistantMessage]);
 
     try {
-      const history = messagesRef.current.map(msg => ({ 
-        role: msg.role === 'user' ? 'user' as const : 'model' as const, 
-        parts: [{ text: msg.content }] 
-      }));
+      const history = messagesRef.current.map(msg => {
+        const parts: Part[] = [];
+        if (msg.attachments) {
+          msg.attachments.forEach(att => {
+            parts.push({ inlineData: { mimeType: att.mimeType, data: att.data } });
+          });
+        }
+        parts.push({ text: msg.content });
+        return { 
+          role: msg.role === 'user' ? 'user' as const : 'model' as const, 
+          parts: parts
+        };
+      });
       
-      const stream = geminiService.streamChat(`${content} [TOOLS: ${activeTools.join(', ')}]`, history);
+      const promptText = `${content} [TOOLS: ${activeTools.join(', ')}]`;
+      const stream = geminiService.streamChat(promptText, history, attachments);
       let fullContent = '';
       const uniqueSources = new Map<string, Source>();
 
@@ -195,6 +207,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error(e);
+      setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, content: 'Error processing intelligence stream. Please verify your connection.' } : m));
     } finally {
       setIsLoading(false);
     }
@@ -254,12 +267,12 @@ const App: React.FC = () => {
               <button onClick={() => handleModeChange(WorkMode.RESEARCH)} className="group p-10 rounded-[40px] border-2 border-slate-800 bg-slate-900/40 hover:border-blue-500/50 transition-all text-left space-y-4">
                 <div className="w-16 h-16 rounded-3xl bg-blue-600 flex items-center justify-center text-white"><LightbulbIcon /></div>
                 <h3 className="text-2xl font-black text-white uppercase italic">Research Track</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">Synthesis of data, scholarly literature reviews, and article drafting powered by deep web grounding.</p>
+                <p className="text-sm text-slate-400 leading-relaxed">Synthesis of data, scholarly literature reviews, and article drafting powered by deep web grounding and multi-modal document analysis.</p>
               </button>
               <button onClick={() => handleModeChange(WorkMode.PROJECT)} className="group p-10 rounded-[40px] border-2 border-slate-800 bg-slate-900/40 hover:border-indigo-500/50 transition-all text-left space-y-4">
                 <div className="w-16 h-16 rounded-3xl bg-indigo-600 flex items-center justify-center text-white"><SettingsIcon /></div>
                 <h3 className="text-2xl font-black text-white uppercase italic">Project Track</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">Technical architecture, code implementation, and production-ready engineering specifications.</p>
+                <p className="text-sm text-slate-400 leading-relaxed">Technical architecture, code implementation, and production-ready engineering specifications based on your docs and schematics.</p>
               </button>
             </div>
           </div>
@@ -292,13 +305,13 @@ const App: React.FC = () => {
         {activeDomain && (
           <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-6 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-2xl flex items-center gap-3 border border-white/10 z-10 ${isResearch ? 'bg-blue-600 shadow-blue-500/20' : 'bg-indigo-600 shadow-indigo-500/20'}`}>
             <span className="flex h-2 w-2 relative"><span className="animate-ping absolute h-full w-full rounded-full bg-white opacity-75"></span><span className="relative h-2 w-2 rounded-full bg-white"></span></span>
-            {isResearch ? 'SYNTHESIZING' : 'CONSTRUCTING'}: {activeSubDomain || activeDomain}
+            {isResearch ? 'ANALYZING' : 'CONSTRUCTING'}: {activeSubDomain || activeDomain}
           </div>
         )}
         <div className="absolute inset-x-0 bottom-full h-32 bg-gradient-to-t from-[#020617] to-transparent pointer-events-none"></div>
         <ChatInput 
-          onSend={(c) => performInference(c, false)} 
-          onSearch={(c) => performInference(c, true)} 
+          onSend={(c, att) => performInference(c, false, att)} 
+          onSearch={(c, att) => performInference(c, true, att)} 
           isLoading={isLoading} 
           mode={activeMode || WorkMode.PROJECT}
         />
