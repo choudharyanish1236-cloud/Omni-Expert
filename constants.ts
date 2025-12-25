@@ -23,7 +23,7 @@ DEVELOPER / IMPLEMENTATION SPEC
 - Core capabilities to prototype:
   • Natural language understanding and intent routing.
   • Multi-language code generation and execution sandboxing.
-  • Domain toolkits: CS (debugger, complexity), Aerodynamics (simulation), Medical (citation templates), Non-tech (workflows).
+  • Domain toolkits: CS (debugger, complexity), Aerodynamics (simulation), Medical (citation templates), Environmental (EIA impact modeling, water treatment logic), Non-tech (workflows).
   • Safety & verification layer.
   • Explainability: concise step-by-step reasoning (no private chain-of-thought).
 

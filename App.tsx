@@ -56,7 +56,8 @@ const DOMAIN_TOOLKITS = {
     { name: 'CFD Analyzer', icon: <BarChartIcon />, desc: 'Fluid dynamics solver' },
     { name: 'P&ID Generator', icon: <ToolboxIcon />, desc: 'Process piping diagrams' },
     { name: 'BIM Integrator', icon: <BookOpenIcon />, desc: 'Building info modeling' },
-    { name: 'Material Selector', icon: <ShieldIcon />, desc: 'Alloy & polymer property database' }
+    { name: 'Material Selector', icon: <ShieldIcon />, desc: 'Alloy & polymer property database' },
+    { name: 'EIA Modeler', icon: <BarChartIcon />, desc: 'Environmental Impact Assessment' }
   ],
   [Domain.MEDICAL]: [
     { name: 'ICD-10 Coder', icon: <ToolboxIcon />, desc: 'Diagnostic classification' },
