@@ -1,10 +1,11 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Domain, Message, Feedback, User, Source, MessageIntent } from './types';
+import { Domain, Message, Feedback, User, Source, MessageIntent, WorkMode } from './types';
 import { geminiService } from './services/geminiService';
 import MessageBubble from './components/MessageBubble';
 import ChatInput from './components/ChatInput';
 import Auth from './components/Auth';
+import Profile from './components/Profile';
+import Toolbox from './components/Toolbox';
 import { 
   TerminalIcon, 
   CpuIcon, 
@@ -19,7 +20,11 @@ import {
   ToolboxIcon,
   ZapIcon,
   ShieldIcon,
-  BarChartIcon
+  BarChartIcon,
+  LightbulbIcon,
+  UserIcon,
+  PencilIcon,
+  XIcon
 } from './components/Icons';
 
 const SUB_DOMAINS = {
@@ -98,16 +103,28 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeDomain, setActiveDomain] = useState<Domain | null>(null);
   const [activeSubDomain, setActiveSubDomain] = useState<string | null>(null);
+  const [activeMode, setActiveMode] = useState<WorkMode>(WorkMode.PROJECT);
   const [activeTools, setActiveTools] = useState<string[]>([]);
   const [roomId, setRoomId] = useState<string>('default_research');
   const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showToolbox, setShowToolbox] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('omni_session');
-    if (savedUser) {
-      setUser({ username: savedUser, id: savedUser });
-      loadHistory(savedUser, roomId);
+    const savedUsername = localStorage.getItem('omni_session');
+    if (savedUsername) {
+      const users = JSON.parse(localStorage.getItem('omni_users') || '{}');
+      const userData = users[savedUsername];
+      if (userData) {
+        setUser({ 
+          username: savedUsername, 
+          id: savedUsername,
+          email: userData.email,
+          profilePicture: userData.profilePicture
+        });
+        loadHistory(savedUsername, roomId);
+      }
     }
   }, []);
 
@@ -163,7 +180,7 @@ const App: React.FC = () => {
       const welcomeMsg: Message = {
         id: 'welcome',
         role: 'assistant',
-        content: `### OmniExpert Collaborative Research Node: ${currentRoom}\n\nSession initialized for **${username}**. This is a high-fidelity shared project space.\n\nSelect a specialized sub-domain or activate **Intelligence Toolkits** to focus targeted intelligence. Any research query sent here will be visible to all active collaborators.\n\n**Ready for project work. Select a domain context.**`,
+        content: `### OmniExpert Collaborative Research Node: ${currentRoom}\n\nSession initialized for **${username}**. This is a high-fidelity shared project space.\n\nSelect a **Work Mode**, specialized sub-domain or activate **Intelligence Toolkits** to focus targeted intelligence. Any research query sent here will be visible to all active collaborators.\n\n**Ready for project work. Select a domain context.**`,
         timestamp: new Date(),
         intent: MessageIntent.CHAT
       };
@@ -187,10 +204,10 @@ const App: React.FC = () => {
     }
   }, [messages, user, roomId]);
 
-  const handleLogin = (username: string) => {
-    localStorage.setItem('omni_session', username);
-    setUser({ username, id: username });
-    loadHistory(username, roomId);
+  const handleLogin = (u: User) => {
+    localStorage.setItem('omni_session', u.username);
+    setUser(u);
+    loadHistory(u.username, roomId);
   };
 
   const handleLogout = () => {
@@ -204,6 +221,33 @@ const App: React.FC = () => {
     setActiveDomain(null);
     setActiveSubDomain(null);
     setActiveTools([]);
+  };
+
+  const handleUpdateProfile = (updatedUser: User) => {
+    const users = JSON.parse(localStorage.getItem('omni_users') || '{}');
+    const oldUsername = user?.username;
+    
+    if (oldUsername && oldUsername !== updatedUser.username) {
+      // Logic for username change (renaming key in storage)
+      const userData = users[oldUsername];
+      delete users[oldUsername];
+      users[updatedUser.username] = { 
+        ...userData, 
+        email: updatedUser.email, 
+        profilePicture: updatedUser.profilePicture 
+      };
+      localStorage.setItem('omni_session', updatedUser.username);
+    } else if (oldUsername) {
+      users[oldUsername] = { 
+        ...users[oldUsername], 
+        email: updatedUser.email, 
+        profilePicture: updatedUser.profilePicture 
+      };
+    }
+
+    localStorage.setItem('omni_users', JSON.stringify(users));
+    setUser(updatedUser);
+    setShowProfile(false);
   };
 
   const handleJoinRoom = () => {
@@ -238,7 +282,7 @@ const App: React.FC = () => {
   const performInference = async (content: string, isSearch: boolean = false) => {
     if (!user) return;
 
-    let contextPrefix = '';
+    let contextPrefix = `[MODE: ${activeMode.toUpperCase()}] `;
     if (activeSubDomain) contextPrefix += `[FOCUS: ${activeSubDomain}] `;
     else if (activeDomain) contextPrefix += `[DOMAIN: ${activeDomain}] `;
     
@@ -279,14 +323,14 @@ const App: React.FC = () => {
 
       const toolsContext = activeTools.length > 0 ? ` leveraging active toolkits: ${activeTools.join(', ')}` : '';
       const domainContext = activeSubDomain 
-        ? `acting as a world-class expert in ${activeSubDomain} (${activeDomain}) ${toolsContext} for deep research and project-level work` 
+        ? `acting as a world-class expert in ${activeSubDomain} (${activeDomain}) ${toolsContext} for deep ${activeMode === WorkMode.RESEARCH ? 'research and literature review' : 'technical prototyping'}` 
         : activeDomain 
           ? `acting as a senior lead expert in ${activeDomain} ${toolsContext}` 
           : `acting as a multi-disciplinary technical lead ${toolsContext}`;
       
       const effectivePrompt = isSearch 
         ? `[INTERNAL_ROUTE: /api/v1/search] ${domainContext}. Query: ${content}. Requirement: Conduct high-fidelity professional research, prioritize peer-reviewed citations where applicable, and synthesize findings into an actionable report.` 
-        : `${domainContext}. Task: ${content}. Ensure technical precision and provide implementation or verification steps where appropriate.`;
+        : `${domainContext}. Task: ${content}. Mode is ${activeMode}. Ensure technical precision and provide only relevant content without unwanted filler.`;
 
       const stream = geminiService.streamChat(effectivePrompt, history);
       
@@ -332,13 +376,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDomainClick = (domain: any) => {
-    if (activeDomain === domain.id) {
+  const handleDomainClick = (domain: Domain) => {
+    if (activeDomain === domain) {
       setActiveDomain(null);
       setActiveSubDomain(null);
       setActiveTools([]);
     } else {
-      setActiveDomain(domain.id);
+      setActiveDomain(domain);
       setActiveSubDomain(null);
       setActiveTools([]);
     }
@@ -370,29 +414,33 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 border border-slate-700/50 rounded-full">
-            <UsersIcon />
-            <div className="flex -space-x-2">
-              {collaborators.map((name, i) => (
-                <div 
-                  key={name} 
-                  title={name}
-                  className={`w-6 h-6 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] font-black uppercase shadow-lg ${
-                    i % 2 === 0 ? 'bg-blue-500' : 'bg-indigo-500'
-                  }`}
-                >
-                  {name.charAt(0)}
-                </div>
-              ))}
-            </div>
-            <span className="text-[10px] font-bold text-slate-400 ml-1">{collaborators.length} ACTIVE</span>
-          </div>
+          <button 
+            onClick={() => setShowToolbox(!showToolbox)}
+            className={`p-2 rounded-lg transition-all border ${
+              showToolbox 
+              ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+              : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500'
+            }`}
+            title="Intelligence Toolbox"
+          >
+            <ToolboxIcon />
+          </button>
 
           <button 
-            onClick={handleJoinRoom}
-            className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+            onClick={() => setShowProfile(true)}
+            className="flex items-center gap-3 px-3 py-1.5 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-full transition-all group"
           >
-            Switch Project
+            <div className="w-6 h-6 rounded-full bg-blue-600 border-2 border-slate-900 overflow-hidden flex items-center justify-center text-[8px] font-black uppercase group-hover:scale-110 transition-transform shadow-lg">
+              {user.profilePicture ? (
+                <img src={user.profilePicture} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                user.username.charAt(0)
+              )}
+            </div>
+            <div className="hidden sm:flex flex-col items-start leading-none pr-2">
+              <span className="text-[10px] font-black uppercase text-slate-200">{user.username}</span>
+              <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Active Operator</span>
+            </div>
           </button>
 
           <button 
@@ -405,13 +453,64 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto custom-scrollbar bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-slate-900/20 via-transparent to-transparent">
+      {showProfile && (
+        <Profile 
+          user={user} 
+          onUpdate={handleUpdateProfile} 
+          onClose={() => setShowProfile(false)} 
+        />
+      )}
+
+      {showToolbox && (
+        <Toolbox 
+          activeDomain={activeDomain}
+          onSelectDomain={handleDomainClick}
+          activeSubDomain={activeSubDomain}
+          onSelectSubDomain={setActiveSubDomain}
+          activeTools={activeTools}
+          onToggleTool={toggleTool}
+          onClose={() => setShowToolbox(false)}
+          subDomains={SUB_DOMAINS}
+          toolkits={DOMAIN_TOOLKITS}
+        />
+      )}
+
+      <main className="flex-1 overflow-y-auto custom-scrollbar bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-slate-900/20 via-transparent to-transparent relative">
         <div className="max-w-7xl mx-auto px-6 pt-10">
+          
+          {/* Mode Switcher */}
+          <div className="flex justify-center mb-8">
+            <div className="bg-slate-900/80 border border-slate-800 p-1 rounded-2xl flex gap-1 shadow-2xl">
+              <button 
+                onClick={() => setActiveMode(WorkMode.RESEARCH)}
+                className={`flex items-center gap-3 px-6 py-3 rounded-xl transition-all ${
+                  activeMode === WorkMode.RESEARCH 
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <LightbulbIcon />
+                <span className="text-xs font-black uppercase tracking-widest">{WorkMode.RESEARCH}</span>
+              </button>
+              <button 
+                onClick={() => setActiveMode(WorkMode.PROJECT)}
+                className={`flex items-center gap-3 px-6 py-3 rounded-xl transition-all ${
+                  activeMode === WorkMode.PROJECT 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <SettingsIcon />
+                <span className="text-xs font-black uppercase tracking-widest">{WorkMode.PROJECT}</span>
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-4 mb-6">
             {DOMAIN_CONFIG.map((domain) => (
               <button 
                 key={domain.id}
-                onClick={() => handleDomainClick(domain)}
+                onClick={() => handleDomainClick(domain.id as Domain)}
                 className={`flex flex-col gap-1 p-4 rounded-2xl border transition-all group flex-1 min-w-[160px] ${
                   activeDomain === domain.id 
                   ? 'border-blue-500 bg-blue-500/5 shadow-lg shadow-blue-500/10 scale-[1.02]' 
@@ -430,63 +529,23 @@ const App: React.FC = () => {
             ))}
           </div>
 
-          {activeDomain && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-              {/* Sub-domains Column */}
-              <div className="lg:col-span-8 bg-slate-900/40 border border-slate-800/60 p-6 rounded-3xl backdrop-blur-md shadow-inner">
-                <div className="flex items-center gap-2 mb-6 px-2">
-                  <div className={`w-1 h-4 rounded-full ${activeDomain === Domain.ENGINEERING ? 'bg-orange-500' : activeDomain === Domain.MEDICAL ? 'bg-rose-500' : 'bg-blue-500'}`}></div>
-                  <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.2em]">Research Discipline</h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {SUB_DOMAINS[activeDomain]?.map((sub) => (
-                    <button
-                      key={sub}
-                      onClick={() => setActiveSubDomain(sub === activeSubDomain ? null : sub)}
-                      className={`px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-tight transition-all text-center leading-tight min-h-[50px] flex items-center justify-center ${
-                        activeSubDomain === sub
-                        ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20 scale-105'
-                        : 'bg-slate-900 border-slate-700/50 text-slate-400 hover:border-blue-500/30 hover:text-slate-200'
-                      }`}
-                    >
-                      {sub}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Toolkits Column */}
-              <div className="lg:col-span-4 bg-slate-900/40 border border-slate-800/60 p-6 rounded-3xl backdrop-blur-md shadow-inner">
-                <div className="flex items-center gap-2 mb-6 px-2">
-                  <ToolboxIcon />
-                  <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.2em]">Intelligence Toolkits</h3>
-                </div>
-                <div className="flex flex-col gap-3">
-                  {DOMAIN_TOOLKITS[activeDomain]?.map((tool) => (
-                    <button
-                      key={tool.name}
-                      onClick={() => toggleTool(tool.name)}
-                      className={`flex items-center gap-4 p-3 rounded-2xl border transition-all text-left ${
-                        activeTools.includes(tool.name)
-                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 shadow-lg'
-                        : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-indigo-500/30 hover:bg-slate-800/40'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-lg bg-slate-800 ${activeTools.includes(tool.name) ? 'text-indigo-400' : 'text-slate-600'}`}>
-                        {tool.icon}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase tracking-widest">{tool.name}</span>
-                        <span className="text-[9px] text-slate-600 font-medium">{tool.desc}</span>
-                      </div>
-                      {activeTools.includes(tool.name) && (
-                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-glow shadow-indigo-500/50"></div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+          {/* Quick Domain Indicator */}
+          {activeDomain && !showToolbox && (
+             <div className="flex items-center gap-4 mb-8 p-4 bg-slate-900/40 border border-slate-800 rounded-2xl animate-in fade-in zoom-in duration-300">
+               <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg">
+                 <SettingsIcon />
+               </div>
+               <div className="flex flex-col">
+                 <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Active Intelligence Node</span>
+                 <span className="text-xs font-bold text-white uppercase">{activeDomain} {activeSubDomain && `> ${activeSubDomain}`}</span>
+               </div>
+               <button 
+                onClick={() => setShowToolbox(true)}
+                className="ml-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-400 border border-slate-700 rounded-xl"
+               >
+                 Expand Toolkit
+               </button>
+             </div>
           )}
 
           <div className="mt-8 pb-48">
@@ -511,7 +570,7 @@ const App: React.FC = () => {
                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
              </span>
-             Research Focus: {activeSubDomain || activeDomain} {activeTools.length > 0 && `+ ${activeTools.length} Tools Active`}
+             {activeMode === WorkMode.RESEARCH ? 'Researching:' : 'Building:'} {activeSubDomain || activeDomain} {activeTools.length > 0 && `+ ${activeTools.length} Tools Active`}
            </div>
          )}
          <div className="absolute inset-x-0 bottom-full h-32 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent pointer-events-none"></div>

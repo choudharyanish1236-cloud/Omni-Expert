@@ -1,8 +1,10 @@
+
 import React, { useState, useMemo } from 'react';
 import { BotIcon } from './Icons';
+import { User } from '../types';
 
 interface AuthProps {
-  onLogin: (username: string) => void;
+  onLogin: (user: User) => void;
 }
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
@@ -54,10 +56,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       const users = JSON.parse(localStorage.getItem('omni_users') || '{}');
 
       if (isLogin) {
-        // Handle legacy plain-text check for existing dev environments, otherwise compare hashes
         const storedValue = users[username];
-        if (storedValue === hashed || storedValue === password) {
-          onLogin(username);
+        const storedHash = typeof storedValue === 'object' ? storedValue.hash : storedValue;
+        
+        if (storedHash === hashed || storedHash === password) {
+          const userData = typeof storedValue === 'object' ? storedValue : { hash: storedValue };
+          onLogin({ 
+            username, 
+            id: username,
+            email: userData.email,
+            profilePicture: userData.profilePicture
+          });
         } else {
           setError('Authorization failed. Invalid username or signature.');
         }
@@ -65,9 +74,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         if (users[username]) {
           setError('Identifier already allocated. Choose another username.');
         } else {
-          users[username] = hashed;
+          users[username] = { hash: hashed, email: '', profilePicture: '' };
           localStorage.setItem('omni_users', JSON.stringify(users));
-          onLogin(username);
+          onLogin({ username, id: username });
         }
       }
     } catch (err) {

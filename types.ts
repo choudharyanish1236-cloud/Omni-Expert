@@ -7,6 +7,11 @@ export enum Domain {
   GENERAL = 'General/Creative'
 }
 
+export enum WorkMode {
+  RESEARCH = 'Research & Articles',
+  PROJECT = 'Project & Prototype'
+}
+
 export enum MessageIntent {
   CHAT = 'CHAT',
   SEARCH = 'SEARCH'
@@ -15,6 +20,8 @@ export enum MessageIntent {
 export interface User {
   username: string;
   id: string;
+  email?: string;
+  profilePicture?: string;
 }
 
 export interface Feedback {
@@ -45,5 +52,6 @@ export interface OmniExpertState {
   isLoading: boolean;
   activeDomain: Domain;
   activeSubDomain?: string;
+  activeMode: WorkMode;
   roomId: string | null;
 }
